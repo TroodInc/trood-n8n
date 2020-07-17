@@ -193,6 +193,501 @@ To change the configuration:
 $ ./openvidu restart
 ```
 
+## 7. Rest API
+
+All REST operations have in common the header referred to authorization. 
+It is implemented via Basic Auth, and it is as simple as applying Base64 
+encoding to the username (always "OPENVIDUAPP") and the password (the value of OPENVIDU_SECRET in `.env` file). 
+If authorization header is wrong, every call to any REST API operation will return HTTP status 401.
+
+* role: (optional string. Check OpenViduRole section of OpenVidu Node Client for a complete description)
+    * SUBSCRIBER
+    * PUBLISHER (**default**)
+    * MODERATOR
+
+### POST /api/sessions
+
+Initialize a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Request
+
+```
+{
+    "recordingMode": "RECORDING_MODE", 
+    "customSessionId": "CUSTOM_SESSION_ID", 
+    "defaultOutputMode": "OUTPUT_MODE", 
+    "defaultRecordingLayout": "RECORDING_LAYOUT", 
+    "defaultCustomLayout": "CUSTOM_LAYOUT"
+}
+```
+
+Response
+
+```
+{
+    "id": "zfgmthb8jl9uellk", 
+    "createdAt": 1538481996019
+}
+```
+
+### POST /api/tokens
+
+Generate a token.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Request
+
+```
+{
+    "session": "SESSION_ID", 
+    "role": "ROLE", 
+    "data": "DATA", 
+    "kurentoOptions": KURENTO_OPTIONS
+}
+```
+
+Response
+
+```
+{
+    "id":"wss://localhost:4443?sessionId=zfgmthb8jl9uellk&token=lnlrtnkwm4v8l7uc&role=PUBLISHER&turnUsername=FYYNRC&turnCredential=yfxxs3", 
+    "session": "zfgmthb8jl9uellk", 
+    "role": "PUBLISHER", 
+    "data": "User Data", 
+    "token":"wss://localhost:4443?sessionId=zfgmthb8jl9uellk&token=lnlrtnkwm4v8l7uc&role=PUBLISHER&turnUsername=FYYNRC&turnCredential=yfxxs3", 
+    "kurentoOptions": 
+    {
+        "videoMaxSendBandwidth": 700, 
+        "allowedFilters": ["GStreamerFilter", "ZBarFilter"]
+    }
+}
+```
+
+### GET /api/sessions/<SESSION_ID>
+
+Get a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Response
+
+```
+{
+    "sessionId":"TestSession",
+    "createdAt":1538482606338,
+    "mediaMode":"ROUTED",
+    "recordingMode":"MANUAL",
+    "defaultOutputMode":"COMPOSED",
+    "defaultRecordingLayout":"BEST_FIT",
+    "customSessionId":"TestSession",
+    "connections":
+    {
+        "numberOfElements":2,
+        "content":[
+        {
+            "connectionId":"vhdxz7abbfirh2lh",
+            "createdAt":1538482606412,
+            "location":"",
+            "platform":"Chrome 69.0.3497.100 on Linux 64-bit",
+            "token":"wss://localhost:4443?sessionId=TestSession&token=2ezkertrimk6nttk&role=PUBLISHER&turnUsername=H0EQLL&turnCredential=kjh48u",
+            "role":"PUBLISHER",
+            "serverData":"",
+            "clientData":"TestClient1",
+            "publishers":[
+            {
+                "createdAt":1538482606976,
+                "streamId":"vhdxz7abbfirh2lh_CAMERA_CLVAU",
+                "mediaOptions":
+                {
+                    "hasAudio":true,
+                    "audioActive":true,
+                    "hasVideo":true,
+                    "videoActive":true,
+                    "typeOfVideo":"CAMERA",
+                    "frameRate":30,
+                    "videoDimensions":"{\"width\":640,\"height\":480}",
+                    "filter":{}
+                }
+            }],
+            "subscribers":[]
+        },
+        {
+            "connectionId":"maxawd3ysuj1rxvq",
+            "createdAt":1538482607659,
+            "location":"",
+            "platform":"Chrome 69.0.3497.100 on Linux 64-bit",
+            "token":"wss://localhost:4443?sessionId=TestSession&token=ovj1b4ysuqmcirti&role=PUBLISHER&turnUsername=INOAHN&turnCredential=oujrqd",
+            "role":"PUBLISHER",
+            "serverData":"",
+            "clientData":"TestClient2",
+            "publishers":[],
+            "subscribers":[
+            {
+                "createdAt":1538482607799,
+                "streamId":"vhdxz7abbfirh2lh_CAMERA_CLVAU",
+                "publisher":"vhdxz7abbfirh2lh"
+            }]
+        }]
+    },
+    "recording":false
+}
+```
+
+### GET /api/sessions
+
+Get an all sessions.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Response
+
+```
+{
+    "numberOfElements":1,
+    "content":[
+    {
+        "sessionId":"TestSession",
+        "createdAt":1538482606338,
+        "mediaMode":"ROUTED",
+        "recordingMode":"MANUAL",
+        "defaultOutputMode":"COMPOSED",
+        "defaultRecordingLayout":"BEST_FIT",
+        "customSessionId":"TestSession",
+        "connections":
+        {
+            "numberOfElements":2,
+            "content":[
+            {
+                "connectionId":"vhdxz7abbfirh2lh",
+                "createdAt":1538482606412,
+                "location":"",
+                "platform":"Chrome 69.0.3497.100 on Linux 64-bit",
+                "token":"wss://localhost:4443?sessionId=TestSession&token=2ezkertrimk6nttk&role=PUBLISHER&turnUsername=H0EQLL&turnCredential=kjh48u",
+                "role":"PUBLISHER",
+                "serverData":"",
+                "clientData":"TestClient1",
+                "publishers":[
+                {
+                    "createdAt":1538482606976,
+                    "streamId":"vhdxz7abbfirh2lh_CAMERA_CLVAU",
+                    "mediaOptions":
+                    {
+                        "hasAudio":true,
+                        "audioActive":true,
+                        "hasVideo":true,
+                        "videoActive":true,
+                        "typeOfVideo":"CAMERA",
+                        "frameRate":30,
+                        "videoDimensions":"{\"width\":640,\"height\":480}",
+                        "filter":{}
+                    }
+                }],
+                "subscribers":[]
+            },
+            {
+                "connectionId":"maxawd3ysuj1rxvq",
+                "createdAt":1538482607659,
+                "location":"",
+                "platform":"Chrome 69.0.3497.100 on Linux 64-bit",
+                "token":"wss://localhost:4443?sessionId=TestSession&token=ovj1b4ysuqmcirti&role=PUBLISHER&turnUsername=INOAHN&turnCredential=oujrqd",
+                "role":"PUBLISHER",
+                "serverData":"",
+                "clientData":"TestClient2",
+                "publishers":[],
+                "subscribers":[
+                {
+                    "createdAt":1538482607799,
+                    "streamId":"vhdxz7abbfirh2lh_CAMERA_CLVAU",
+                    "publisher":"vhdxz7abbfirh2lh"
+                }]
+            }]
+        },
+        "recording":false
+    }]
+}
+```
+
+### POST /api/signal
+
+Send a signal to a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Request
+
+```
+{
+    "session": "SESSION_ID", 
+    "to": ["connectionId1", "connectionId2"], 
+    "type": "MY_TYPE", 
+    "data": "This is my signal data"
+}
+```
+
+### DELETE /api/sessions/<SESSION_ID>
+
+Close a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+### DELETE /api/sessions/<SESSION_ID>/connection/<CONNECTION_ID>
+
+Force the disconnection of a user from a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+### DELETE /api/sessions/<SESSION_ID>/stream/<STREAM_ID>
+
+Force the unpublishing of a user's stream from a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+###  POST /api/sessions/<SESSION_ID>/connection
+
+Publish a stream from an IP camera.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Request
+
+```
+{
+    "type": "IPCAM", 
+    "rtspUri": "rtsp://b1.dnsdojo.com:1935/live/sys3.stream", 
+    "adaptativeBitrate": true, 
+    "onlyPlayWithSubscribers": true, 
+    "data": "Office security camera"
+}
+```
+
+Response
+
+```
+{
+    "connectionId": "ipc_IPCAM_rtsp_A8MJ_91_191_213_49_554_live_mpeg4_sdp", 
+    "createdAt": 1582121476379, 
+    "location": "unknown", 
+    "platform": "IPCAM", 
+    "role": "PUBLISHER", 
+    "serverData": "MY_IP_CAMERA", 
+    "publishers": [
+    {
+        "createdAt": 1582121476439, 
+        "streamId": "str_IPC_XC1W_ipc_IPCAM_rtsp_A8MJ_91_191_213_49_554_live_mpeg4_sdp", 
+        "rtspUri": "rtsp://91.191.213.49:554/live_mpeg4.sdp", 
+        "mediaOptions": 
+        {
+            "hasAudio": true, 
+            "audioActive": true, 
+            "hasVideo": true, 
+            "videoActive": true, 
+            "typeOfVideo": "IPCAM", 
+            "frameRate": null, 
+            "videoDimensions": null, 
+            "filter": {}, 
+            "adaptativeBitrate": true, 
+            "onlyPlayWithSubscribers": true
+        }
+    } ], 
+    "subscribers": []
+}
+```
+
+### POST /api/recordings/start
+
+Start the recording of a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Request
+
+```
+{
+    "session": "SESSION_ID", 
+    "name": "NAME", 
+    "outputMode": "OUTPUT_MODE", 
+    "hasAudio": "HAS_AUDIO", 
+    "hasVideo": "HAS_VIDEO", 
+    "resolution": "RESOLUTION", 
+    "recordingLayout": "RECORDING_LAYOUT", 
+    "customLayout": "CUSTOM_LAYOUT"
+}
+```
+
+Response
+
+```
+{
+    "id": "fds4e07mdug1ga3h", 
+    "sessionId": "fds4e07mdug1ga3h", 
+    "name": "MyRecording", 
+    "outputMode": "COMPOSED", 
+    "hasAudio":true, 
+    "hasVideo":false,
+    "createdAt":1538483606521, 
+    "size":3205004, 
+    "duration":12.92, 
+    "url":null, 
+    "status": "started"
+}
+```
+
+### POST/api/recordings/stop/<RECORDING_ID>
+
+Stop the recording of a session.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Response
+
+```
+{
+    "id": "fds4e07mdug1ga3h", 
+    "sessionId": "fds4e07mdug1ga3h", 
+    "name": "MyRecording", 
+    "outputMode": "COMPOSED", 
+    "hasAudio": true, 
+    "hasVideo": false, 
+    "createdAt": 1538483606521, 
+    "size": 3205004, 
+    "duration": 12.92, 
+    "url": null, 
+    "status": "stopped"
+}
+```
+
+### GET /api/recordings/<RECORDING_ID>
+
+Get recording info
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Response
+
+```
+{
+    "id": "fds4e07mdug1ga3h", 
+    "sessionId": "fds4e07mdug1ga3h", 
+    "name": "MyRecording", 
+    "outputMode": "COMPOSED", 
+    "hasAudio": true, 
+    "hasVideo": false, 
+    "createdAt": 1538483606521, 
+    "size": 3205004, 
+    "duration": 12.92, 
+    "url": null, 
+    "status": "stopped"
+}
+```
+
+### GET /api/recordings
+
+Get all recordings info.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
+Response
+
+```
+{
+    "count": 2, 
+    "items": [
+    {
+        "id": "n0kcws1evvn3esmo", 
+        "sessionId": "n0kcws1evvn3esmo", 
+        "name": "n0kcws1evvn3esmo", 
+        "outputMode": "COMPOSED", 
+        "hasAudio": true, 
+        "hasVideo": true, 
+        "recordingLayout": "BEST_FIT", 
+        "resolution": "1920x1080", 
+        "createdAt": 1521202349460, 
+        "size": 22887561, 
+        "duration": 132.08, 
+        "url": "https://localhost:4443/recordings/n0kcws1evvn3esmo/n0kcws1evvn3esmo.mp4", 
+        "status": "available"
+    }, 
+    {
+        "id": "fds4e07mdug1ga3h", 
+        "sessionId": "fds4e07mdug1ga3h", 
+        "name": "MyRecording", 
+        "outputMode": "COMPOSED", 
+        "hasAudio": true, 
+        "hasVideo": false, 
+        "createdAt": 1538483606521, 
+        "size": 3205004, 
+        "duration": 12.92, 
+        "url": "https://localhost:4443/recordings/fds4e07mdug1ga3h/MyRecording.webm", 
+        "status": "available"
+    }]
+}
+```
+
+### DELETE /api/recordings/<RECORDING_ID>
+
+Delete a recording.
+
+|   |   |
+|---|---|
+|Content-Type| application/json|
+|Authorization|Basic EncodeBase64(OPENVIDUAPP:<YOUR_SECRET>)|
+|   |   |
+
 ## 5. Problems
 
 ### Configuration errors
