@@ -1,0 +1,258 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: coturn
+  name: coturn
+spec:
+  containers:
+  - env:
+    - name: DB_NAME
+      value: "0"
+    - name: DB_PASSWORD
+      value: TROOD
+    - name: MAX_PORT
+      value: "65535"
+    - name: MIN_PORT
+      value: "57001"
+    - name: REDIS_IP
+      value: 127.0.0.1
+    - name: TURN_LISTEN_PORT
+      value: "3478"
+    image: openvidu/openvidu-coturn:1.0.0
+    name: coturn
+    resources: {}
+  restartPolicy: OnFailure
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: /snap/kompose/1/./kompose-linux-amd64 convert -f k8s.yml
+    kompose.version: 1.18.0 (06a2e56)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: kms
+  name: kms
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        io.kompose.service: kms
+    spec:
+      containers:
+      - env:
+        - name: KMS_MAX_PORT
+          value: "57000"
+        - name: KMS_MIN_PORT
+          value: "40000"
+        image: kurento/kurento-media-server:6.14.0
+        name: kms
+        resources: {}
+        volumeMounts:
+        - mountPath: /opt/openvidu/kms-crashes
+          name: kms-claim0
+      restartPolicy: Always
+      volumes:
+      - name: kms-claim0
+        persistentVolumeClaim:
+          claimName: kms-claim0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: kms-claim0
+  name: kms-claim0
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: openvidu-server
+  name: openvidu-server
+spec:
+  containers:
+  - command:
+    - /bin/bash
+    - -c
+    - export COTURN_IP=`/usr/local/bin/discover_my_public_ip.sh`; /usr/local/bin/entrypoint.sh
+    env:
+    - name: CERTIFICATE_TYPE
+      valueFrom:
+        configMapKeyRef:
+          key: CERTIFICATE_TYPE
+          name: openvidu-server-env
+    - name: COTURN_REDIS_IP
+      value: 127.0.0.1
+    - name: COTURN_REDIS_PASSWORD
+      value: TROOD
+    - name: DOMAIN_OR_PUBLIC_IP
+      valueFrom:
+        configMapKeyRef:
+          key: DOMAIN_OR_PUBLIC_IP
+          name: openvidu-server-env
+    - name: KMS_URIS
+      value: '["ws://localhost:8888/kurento"]'
+    - name: LETSENCRYPT_EMAIL
+      valueFrom:
+        configMapKeyRef:
+          key: LETSENCRYPT_EMAIL
+          name: openvidu-server-env
+    - name: OPENVIDU_CDR
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_CDR
+          name: openvidu-server-env
+    - name: OPENVIDU_CDR_PATH
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_CDR_PATH
+          name: openvidu-server-env
+    - name: OPENVIDU_RECORDING
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_RECORDING
+          name: openvidu-server-env
+    - name: OPENVIDU_RECORDING_AUTOSTOP_TIMEOUT
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_RECORDING_AUTOSTOP_TIMEOUT
+          name: openvidu-server-env
+    - name: OPENVIDU_RECORDING_CUSTOM_LAYOUT
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_RECORDING_CUSTOM_LAYOUT
+          name: openvidu-server-env
+    - name: OPENVIDU_RECORDING_NOTIFICATION
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_RECORDING_NOTIFICATION
+          name: openvidu-server-env
+    - name: OPENVIDU_RECORDING_PATH
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_RECORDING_PATH
+          name: openvidu-server-env
+    - name: OPENVIDU_RECORDING_PUBLIC_ACCESS
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_RECORDING_PUBLIC_ACCESS
+          name: openvidu-server-env
+    - name: OPENVIDU_SECRET
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_SECRET
+          name: openvidu-server-env
+    - name: OPENVIDU_SESSIONS_GARBAGE_INTERVAL
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_SESSIONS_GARBAGE_INTERVAL
+          name: openvidu-server-env
+    - name: OPENVIDU_SESSIONS_GARBAGE_THRESHOLD
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_SESSIONS_GARBAGE_THRESHOLD
+          name: openvidu-server-env
+    - name: OPENVIDU_STREAMS_VIDEO_MAX_RECV_BANDWIDTH
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_STREAMS_VIDEO_MAX_RECV_BANDWIDTH
+          name: openvidu-server-env
+    - name: OPENVIDU_STREAMS_VIDEO_MAX_SEND_BANDWIDTH
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_STREAMS_VIDEO_MAX_SEND_BANDWIDTH
+          name: openvidu-server-env
+    - name: OPENVIDU_STREAMS_VIDEO_MIN_RECV_BANDWIDTH
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_STREAMS_VIDEO_MIN_RECV_BANDWIDTH
+          name: openvidu-server-env
+    - name: OPENVIDU_STREAMS_VIDEO_MIN_SEND_BANDWIDTH
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_STREAMS_VIDEO_MIN_SEND_BANDWIDTH
+          name: openvidu-server-env
+    - name: OPENVIDU_WEBHOOK
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_WEBHOOK
+          name: openvidu-server-env
+    - name: OPENVIDU_WEBHOOK_EVENTS
+      valueFrom:
+        configMapKeyRef:
+          key: OPENVIDU_WEBHOOK_EVENTS
+          name: openvidu-server-env
+    - name: SERVER_PORT
+      value: "5443"
+    - name: SERVER_SSL_ENABLED
+      value: "false"
+    image: openvidu/openvidu-server:2.15.0-beta1
+    name: openvidu-server
+    resources: {}
+    volumeMounts:
+    - mountPath: /var/run/docker.sock
+      name: openvidu-server-claim0
+  restartPolicy: OnFailure
+  volumes:
+  - name: openvidu-server-claim0
+    persistentVolumeClaim:
+      claimName: openvidu-server-claim0
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: openvidu-server-claim0
+  name: openvidu-server-claim0
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+status: {}
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: /snap/kompose/1/./kompose-linux-amd64 convert -f k8s.yml
+    kompose.version: 1.18.0 (06a2e56)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: redis
+  name: redis
+spec:
+  replicas: 1
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        io.kompose.service: redis
+    spec:
+      containers:
+      - env:
+        - name: REDIS_PASSWORD
+          value: TROOD
+        image: openvidu/openvidu-redis:1.0.0
+        name: redis
+        resources: {}
+      restartPolicy: Always
+
