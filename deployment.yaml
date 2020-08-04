@@ -7,6 +7,9 @@ metadata:
   name: coturn
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: coturn
   template:
     metadata:
       annotations:
@@ -26,29 +29,50 @@ spec:
         - name: MIN_PORT
           value: "57001"
         - name: REDIS_IP
-          value: 127.0.0.1
+          value: redis-service
         - name: TURN_LISTEN_PORT
           value: "3478"
         image: openvidu/openvidu-coturn:1.0.0
         name: coturn
-    restartPolicy: OnFailure
+        ports:
+          - containerPort: 3478
+      restartPolicy: Always
 ---
-apiVersion: extensions/v1beta1
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn-auth
+  labels:
+    app: coturn
+spec:
+  ports:
+    - port: 3478
+      targetPort: 3478
+      protocol: TCP
+      name: coturn-port
+  selector:
+    app: coturn
+  type: NodePort
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
     kompose.version: 1.18.0 (06a2e56)
   creationTimestamp: null
   labels:
-    io.kompose.service: kms
+    app: kms
   name: kms
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: kms
   template:
     metadata:
       creationTimestamp: null
       labels:
-        io.kompose.service: kms
+        app: kms
     spec:
       containers:
       - env:
@@ -62,6 +86,22 @@ spec:
           - containerPort: 8888
       restartPolicy: Always
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kms-service
+  labels:
+    app: kms
+spec:
+  ports:
+    - port: 8888
+      targetPort: 8888
+      protocol: TCP
+      name: kms-port
+  selector:
+    app: kms
+  type: ClusterIP
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,6 +111,9 @@ metadata:
   name: openvidu-server
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: openvidu-server
   template:
     metadata:
       annotations:
@@ -86,35 +129,59 @@ spec:
         - export COTURN_IP=`/usr/local/bin/discover_my_public_ip.sh`; /usr/local/bin/entrypoint.sh
         env:
         - name: COTURN_REDIS_IP
-          value: 127.0.0.1
+          value: redis-service
         - name: COTURN_REDIS_PASSWORD
           value: TROOD
         - name: KMS_URIS
-          value: '["ws://localhost:8888/kurento"]'
-        - name: SERVER_PORT
-          value: "5443"
+          value: "[ws:/kurento]"
         - name: SERVER_SSL_ENABLED
           value: "false"
+        - name: DOMAIN_OR_PUBLIC_IP
+          value: localhost
+        - name: OPENVIDU_SECRET
+          value: TROOD
         image: openvidu/openvidu-server:2.15.0-beta1
         name: openvidu-server
-      restartPolicy: OnFailure
+        ports:
+          - containerPort: 5443
+      restartPolicy: Always
 ---
-apiVersion: extensions/v1beta1
+apiVersion: v1
+kind: Service
+metadata:
+  name: openvidu-server
+  labels:
+    app: openvidu-server
+spec:
+  ports:
+    - port: 5443
+      targetPort: 5443
+      protocol: TCP
+      name: openvidu-server
+  selector:
+    app: openvidu-server
+  type: ClusterIP
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
     kompose.version: 1.18.0 (06a2e56)
   creationTimestamp: null
   labels:
-    io.kompose.service: redis
+    app: redis
   name: redis
 spec:
   replicas: 1
+  strategy: {}
+  selector:
+    matchLabels:
+      app: redis
   template:
     metadata:
       creationTimestamp: null
       labels:
-        io.kompose.service: redis
+        app: redis
     spec:
       containers:
       - env:
@@ -122,20 +189,38 @@ spec:
           value: TROOD
         image: openvidu/openvidu-redis:1.0.0
         name: redis
+        ports:
+          - containerPort: 6379
       restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  labels:
+    app: redis
+spec:
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+  type: ClusterIP
+  selector:
+    app: redis
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-  - host: eme-dev.saas.trood.ru
-    http:
+  - http:
       paths:
-      - path: /webrtc
-        backend:
-          serviceName: openvidu-server
-          servicePort: 5443
+        - path: /
+          backend:
+            serviceName: openvidu-server
+            servicePort: 5443
+        - path: /kurento
+          backend:
+            serviceName: kms-server
+            servicePort: 8888
