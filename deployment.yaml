@@ -1,57 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  labels:
-    app: coturn
-  name: coturn
-spec:
-  selector:
-    matchLabels:
-      app: coturn
-  template:
-    metadata:
-      labels:
-        app: coturn
-    spec:
-      containers:
-      - name: coturn
-        image: openvidu/openvidu-coturn:1.0.0
-        env:
-        - name: DB_NAME
-          value: "0"
-        - name: DB_PASSWORD
-          value: TROOD
-        - name: MAX_PORT
-          value: "65535"
-        - name: MIN_PORT
-          value: "57001"
-        - name: REDIS_IP
-          value: redis
-        - name: TURN_LISTEN_PORT
-          value: "3478"
-        ports:
-        - containerPort: 3478
-      restartPolicy: Always
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: coturn
-  labels:
-    app: coturn
-spec:
-  selector:
-    app: coturn
-  ports:
-  - port: 3478
-    targetPort: 3478
-    protocol: TCP
-    name: coturn-port
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: kms
+  namespace: eme-dev
   labels:
     app: kms
 spec:
@@ -63,9 +14,19 @@ spec:
       labels:
         app: kms
     spec:
+      nodeSelector:
+        loadType: video
+      tolerations:
+      - key: "loadType"
+        operator: "Equal"
+        value: "video"
+        effect: "NoSchedule"
       containers:
       - name: kms
         image: kurento/kurento-media-server:6.14.0
+        resources:
+          limits:
+            memory: "2Gi"
         env:
         - name: KMS_MAX_PORT
           value: "57000"
@@ -79,6 +40,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kms
+  namespace: eme-dev
   labels:
     app: kms
 spec:
@@ -97,6 +59,7 @@ metadata:
   labels:
     app: openvidu
   name: openvidu
+  namespace: eme-dev
 spec:
   replicas: 1
   selector:
@@ -107,16 +70,25 @@ spec:
       labels:
         app: openvidu
     spec:
+      nodeSelector:
+        loadType: video
+      tolerations:
+      - key: "loadType"
+        operator: "Equal"
+        value: "video"
+        effect: "NoSchedule"
       containers:
       - name: openvidu
         image: openvidu/openvidu-server:2.15.0-beta1
         command:
         - /bin/bash
         - -c
-        - export COTURN_IP=coturn; /usr/local/bin/entrypoint.sh
+        - export COTURN_IP=127.0.0.1; /usr/local/bin/entrypoint.sh
         env:
+        - name: OPENVIDU_SECRET
+          value: TROOD
         - name: COTURN_REDIS_IP
-          value: redis-service
+          value: 127.0.0.1
         - name: COTURN_REDIS_PASSWORD
           value: TROOD
         - name: KMS_URIS
@@ -125,79 +97,79 @@ spec:
           value: "false"
         - name: DOMAIN_OR_PUBLIC_IP
           value: localhost
-        - name: OPENVIDU_SECRET
+        - name: OPENVIDU_PUBLICURL
+          value: "https://eme-dev.saas.trood.ru/openvidu/"
+        ports:
+        - containerPort: 443
+      - name: redis
+        image: redis:5.0.7
+        env:
+        - name: REDIS_PASSWORD
           value: TROOD
         ports:
-        - containerPort: 5443
+        - containerPort: 6379
+      - name: coturn
+        image: openvidu/openvidu-coturn:1.0.0
+        env:
+        - name: DB_NAME
+          value: "0"
+        - name: DB_PASSWORD
+          value: TROOD
+        - name: MAX_PORT
+          value: "65535"
+        - name: MIN_PORT
+          value: "57001"
+        - name: REDIS_IP
+          value: 127.0.0.1
+        - name: TURN_LISTEN_PORT
+          value: "3478"
+        ports:
+        - containerPort: 3478
       restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: openvidu
+  namespace: eme-dev
   labels:
     app: openvidu
 spec:
   selector:
     app: openvidu
   ports:
-  - port: 5443
-    targetPort: 5443
+  - port: 443
+    targetPort: 443
     protocol: TCP
     name: openvidu
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: redis
-  name: redis
-spec:
-  selector:
-    matchLabels:
-      app: redis
-  template:
-    metadata:
-      labels:
-        app: redis
-    spec:
-      containers:
-      - name: redis
-        image: redis
-        env:
-        - name: REDIS_PASSWORD
-          value: TROOD
-        ports:
-        - containerPort: 6379
-      restartPolicy: Always
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis
-  labels:
-    app: redis
-spec:
-  selector:
-    app: redis
-  ports:
-  - name: redis
-    port: 6379
-    targetPort: 6379
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: ingress
+  name: video-routes
+  namespace: eme-dev
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt"
+    nginx.ingress.kubernetes.io/backend-protocol: "http"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "PUT, GET, POST, OPTIONS, DELETE, PATCH"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
 spec:
+  tls:
+    - hosts:
+        - eme-dev.saas.trood.ru
+      secretName: eme-dev
   rules:
-  - http:
+  - host: eme-dev.saas.trood.ru
+    http:
       paths:
-      - path: /
+      - path: /openvidu/(.*)
         backend:
           serviceName: openvidu
-          servicePort: 5443
-      - path: /kurento
+          servicePort: 443
+      - path: /(kurento)
         backend:
           serviceName: kms
           servicePort: 8888
