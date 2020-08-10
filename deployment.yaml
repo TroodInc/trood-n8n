@@ -1,25 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
   labels:
     app: coturn
   name: coturn
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: coturn
   template:
     metadata:
-      annotations:
-        kompose.version: 1.18.0 (06a2e56)
-      creationTimestamp: null
       labels:
         app: coturn
     spec:
       containers:
-      - env:
+      - name: coturn
+        image: openvidu/openvidu-coturn:1.0.0
+        env:
         - name: DB_NAME
           value: "0"
         - name: DB_PASSWORD
@@ -29,184 +26,164 @@ spec:
         - name: MIN_PORT
           value: "57001"
         - name: REDIS_IP
-          value: redis-service
+          value: redis
         - name: TURN_LISTEN_PORT
           value: "3478"
-        image: openvidu/openvidu-coturn:1.0.0
-        name: coturn
         ports:
-          - containerPort: 3478
+        - containerPort: 3478
       restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: coturn-auth
+  name: coturn
   labels:
     app: coturn
 spec:
-  ports:
-    - port: 3478
-      targetPort: 3478
-      protocol: TCP
-      name: coturn-port
   selector:
     app: coturn
-  type: NodePort
+  ports:
+  - port: 3478
+    targetPort: 3478
+    protocol: TCP
+    name: coturn-port
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    kompose.version: 1.18.0 (06a2e56)
-  creationTimestamp: null
+  name: kms
   labels:
     app: kms
-  name: kms
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: kms
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: kms
     spec:
       containers:
-      - env:
+      - name: kms
+        image: kurento/kurento-media-server:6.14.0
+        env:
         - name: KMS_MAX_PORT
           value: "57000"
         - name: KMS_MIN_PORT
           value: "40000"
-        image: kurento/kurento-media-server:6.14.0
-        name: kms
         ports:
-          - containerPort: 8888
+        - containerPort: 8888
       restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: kms-service
+  name: kms
   labels:
     app: kms
 spec:
-  ports:
-    - port: 8888
-      targetPort: 8888
-      protocol: TCP
-      name: kms-port
   selector:
     app: kms
-  type: ClusterIP
+  ports:
+  - port: 8888
+    targetPort: 8888
+    protocol: TCP
+    name: kms-port
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   creationTimestamp: null
   labels:
-    app: openvidu-server
-  name: openvidu-server
+    app: openvidu
+  name: openvidu
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: openvidu-server
+      app: openvidu
   template:
     metadata:
-      annotations:
-        kompose.version: 1.18.0 (06a2e56)
-      creationTimestamp: null
       labels:
-        app: openvidu-server
+        app: openvidu
     spec:
       containers:
-      - command:
+      - name: openvidu
+        image: openvidu/openvidu-server:2.15.0-beta1
+        command:
         - /bin/bash
         - -c
-        - export COTURN_IP=`/usr/local/bin/discover_my_public_ip.sh`; /usr/local/bin/entrypoint.sh
+        - export COTURN_IP=coturn; /usr/local/bin/entrypoint.sh
         env:
         - name: COTURN_REDIS_IP
           value: redis-service
         - name: COTURN_REDIS_PASSWORD
           value: TROOD
         - name: KMS_URIS
-          value: "[ws:/kurento]"
+          value: "[\"ws://kms:8888/kurento\"]"
         - name: SERVER_SSL_ENABLED
           value: "false"
         - name: DOMAIN_OR_PUBLIC_IP
           value: localhost
         - name: OPENVIDU_SECRET
           value: TROOD
-        image: openvidu/openvidu-server:2.15.0-beta1
-        name: openvidu-server
         ports:
-          - containerPort: 5443
+        - containerPort: 5443
       restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: openvidu-server
+  name: openvidu
   labels:
-    app: openvidu-server
+    app: openvidu
 spec:
-  ports:
-    - port: 5443
-      targetPort: 5443
-      protocol: TCP
-      name: openvidu-server
   selector:
-    app: openvidu-server
-  type: ClusterIP
+    app: openvidu
+  ports:
+  - port: 5443
+    targetPort: 5443
+    protocol: TCP
+    name: openvidu
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    kompose.version: 1.18.0 (06a2e56)
-  creationTimestamp: null
   labels:
     app: redis
   name: redis
 spec:
-  replicas: 1
-  strategy: {}
   selector:
     matchLabels:
       app: redis
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: redis
     spec:
       containers:
-      - env:
+      - name: redis
+        image: redis
+        env:
         - name: REDIS_PASSWORD
           value: TROOD
-        image: openvidu/openvidu-redis:1.0.0
-        name: redis
         ports:
-          - containerPort: 6379
+        - containerPort: 6379
       restartPolicy: Always
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-service
+  name: redis
   labels:
     app: redis
 spec:
+  selector:
+    app: redis
   ports:
   - name: redis
     port: 6379
     targetPort: 6379
-  type: ClusterIP
-  selector:
-    app: redis
 ---
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
@@ -216,11 +193,11 @@ spec:
   rules:
   - http:
       paths:
-        - path: /
-          backend:
-            serviceName: openvidu-server
-            servicePort: 5443
-        - path: /kurento
-          backend:
-            serviceName: kms-server
-            servicePort: 8888
+      - path: /
+        backend:
+          serviceName: openvidu
+          servicePort: 5443
+      - path: /kurento
+        backend:
+          serviceName: kms
+          servicePort: 8888
