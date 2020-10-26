@@ -1,23 +1,48 @@
-import {
-    BINARY_ENCODING,
-    IWebhookFunctions,
-} from 'n8n-core';
+import {BINARY_ENCODING, IWebhookFunctions,} from 'n8n-core';
 
-import {
-    IDataObject,
-    INodeExecutionData,
-    INodeType,
-    INodeTypeDescription,
-    IWebhookResponseData,
-} from 'n8n-workflow';
+import {IDataObject, INodeExecutionData, INodeType, INodeTypeDescription, IWebhookResponseData,} from 'n8n-workflow';
 
-import * as basicAuth from 'basic-auth';
-
-import { Response } from 'express';
-
+import {Response} from 'express';
+import {IncomingHttpHeaders} from "http";
 import * as fs from 'fs';
-
 import * as formidable from 'formidable';
+import * as crypto from 'crypto';
+
+interface TroodAuth {
+    type: string;
+    service_domain: string;
+    service_auth_secret: string;
+}
+
+function checkABAC(abac:object): boolean{
+    const domain = process.env['SERVICE_DOMAIN'];
+    return !!Object.prototype.hasOwnProperty.call(abac, domain!);
+}
+
+function getServiceToken():string {
+    const domain:string = process.env['SERVICE_DOMAIN']!;
+    const domainBuf = Buffer.from(domain);
+
+    const secret:string = process.env['SERVICE_AUTH_SECRET']!;
+
+    const troodSign = "n8n.sign";
+    const signBuf =  Buffer.from(troodSign);
+
+    const key = crypto.createHash("sha1").update(signBuf+secret).digest();
+    let signature = crypto.createHmac("sha1", key ).update(domainBuf).digest('base64');
+
+    signature = signature.slice(0,-1);
+
+    return "Service " + domain + ":" + signature;
+}
+
+function parseTroodAuth(authHeader: string): TroodAuth {
+    return {
+        type: authHeader?.split(" ")[0],
+        service_domain: authHeader?.split(" ")[1].split(":")[0],
+        service_auth_secret: authHeader?.split(" ")[1].split(":")[1],
+    };
+}
 
 function authorizationError(resp: Response, realm: string, responseCode: number, message?: string) {
     if (message === undefined) {
@@ -28,51 +53,25 @@ function authorizationError(resp: Response, realm: string, responseCode: number,
             message = 'Authorization data is wrong!';
         }
     }
-
     resp.writeHead(responseCode, { 'WWW-Authenticate': `Basic realm="${realm}"` });
-    resp.end(message);
     return {
         noWebhookResponse: true,
     };
 }
 
-export class Webhook implements INodeType {
+export class WebhookTrood implements INodeType {
     description: INodeTypeDescription = {
-        displayName: 'Webhook',
-        name: 'webhook',
+        displayName: 'WebhookTRood',
+        name: 'webhookTrood',
         group: ['trigger'],
         version: 1,
         description: 'Starts the workflow when a webhook got called.',
         defaults: {
-            name: 'Webhook',
+            name: 'WebhookTrood',
             color: '#885577',
         },
         inputs: [],
         outputs: ['main'],
-        credentials: [
-            {
-                name: 'httpBasicAuth',
-                required: true,
-                displayOptions: {
-                    show: {
-                        authentication: [
-                            'basicAuth',
-                        ],
-                    },
-                },
-            },
-            {
-                name: 'httpHeaderAuth',
-                required: true,
-                displayOptions: {
-                    show: {
-                        authentication: [
-                            'headerAuth',
-                        ],
-                    },
-                },
-            },
-        ],
         webhooks: [
             {
                 name: 'default',
@@ -82,34 +81,14 @@ export class Webhook implements INodeType {
                 responseMode: '={{$parameter["responseMode"]}}',
                 responseData: '={{$parameter["responseData"]}}',
                 responseBinaryPropertyName: '={{$parameter["responseBinaryPropertyName"]}}',
-                responseContentType: '={{$parameter["options"]["responseContentType"]}}',
+
+                ContentType: '={{$parameter["options"]["responseContentType"]}}',
                 responsePropertyName: '={{$parameter["options"]["responsePropertyName"]}}',
                 responseHeaders: '={{$parameter["options"]["responseHeaders"]}}',
                 path: '={{$parameter["path"]}}',
             },
         ],
         properties: [
-            {
-                displayName: 'Authentication',
-                name: 'authentication',
-                type: 'options',
-                options: [
-                    {
-                        name: 'Basic Auth',
-                        value: 'basicAuth'
-                    },
-                    {
-                        name: 'Header Auth',
-                        value: 'headerAuth'
-                    },
-                    {
-                        name: 'None',
-                        value: 'none'
-                    },
-                ],
-                default: 'none',
-                description: 'The way to authenticate.',
-            },
             {
                 displayName: 'HTTP Method',
                 name: 'httpMethod',
@@ -338,55 +317,44 @@ export class Webhook implements INodeType {
     };
 
     async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-        const authentication = this.getNodeParameter('authentication') as string;
         const options = this.getNodeParameter('options', {}) as IDataObject;
         const req = this.getRequestObject();
         const resp = this.getResponseObject();
         const headers = this.getHeaderData();
         const realm = 'Webhook';
 
-        if (authentication === 'basicAuth') {
-            // Basic authorization is needed to call webhook
-            const httpBasicAuth = this.getCredentials('httpBasicAuth');
+        const authInfo:string = (headers as IncomingHttpHeaders).authorization!;
+        if (authInfo === undefined) {
+            authorizationError(resp, realm, 401);
+        }
 
-            if (httpBasicAuth === undefined || !httpBasicAuth.user || !httpBasicAuth.password) {
-                // Data is not defined on node so can not authenticate
-                return authorizationError(resp, realm, 500, 'No authentication data defined on node!');
+        const authObj = parseTroodAuth(authInfo);
+        const opt = {
+            'method': 'POST',
+            'url': process.env['TROOD_AUTH_SERVICE_URL'] + '/api/v1.0/verify-token/',
+            'headers': {
+                'Authorization': getServiceToken()
+            },
+            formData: {
+                "type": authObj.type,
+                'token': authObj.service_domain+authObj.service_auth_secret
             }
+        };
 
-            const basicAuthData = basicAuth(req);
-
-            if (basicAuthData === undefined) {
-                // Authorization data is missing
-                return authorizationError(resp, realm, 401);
+        try{
+            const serviceInfo = await this.helpers.request(opt);
+            const info = JSON.parse(serviceInfo);
+            if (!checkABAC(info.data.abac)){
+                authorizationError(resp, realm, 403);
             }
-
-            if (basicAuthData.name !== httpBasicAuth!.user || basicAuthData.pass !== httpBasicAuth!.password) {
-                // Provided authentication data is wrong
-                return authorizationError(resp, realm, 403);
-            }
-        } else if (authentication === 'headerAuth') {
-            // Special header with value is needed to call webhook
-            const httpHeaderAuth = this.getCredentials('httpHeaderAuth');
-
-            if (httpHeaderAuth === undefined || !httpHeaderAuth.name || !httpHeaderAuth.value) {
-                // Data is not defined on node so can not authenticate
-                return authorizationError(resp, realm, 500, 'No authentication data defined on node!');
-            }
-            const headerName = (httpHeaderAuth.name as string).toLowerCase();
-            const headerValue = (httpHeaderAuth.value as string);
-
-            if (!headers.hasOwnProperty(headerName) || (headers as IDataObject)[headerName] !== headerValue) {
-                // Provided authentication data is wrong
-                return authorizationError(resp, realm, 403);
-            }
+        }catch (e) {
+            authorizationError(resp, realm, 403,e);
         }
 
         // @ts-ignore
         const mimeType = headers['content-type'] || 'application/json';
         if (mimeType.includes('multipart/form-data')) {
             const form = new formidable.IncomingForm();
-
             return new Promise((resolve, reject) => {
 
                 form.parse(req, async (err, data, files) => {
@@ -461,7 +429,6 @@ export class Webhook implements INodeType {
                 });
             });
         }
-
         const response: INodeExecutionData = {
             json: {
                 body: this.getBodyData(),
@@ -487,5 +454,6 @@ export class Webhook implements INodeType {
                 ],
             ],
         };
+
     }
 }
