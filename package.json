@@ -1,0 +1,36 @@
+{
+  "name": "trood-n8n",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Trood extensions for N8N platform",
+  "main": "index.js",
+  "dependencies": {
+    "@types/chai": "^4.2.14",
+    "@types/node": "^14.14.10",
+    "chai": "^4.2.0",
+    "mocha": "^7.2.0",
+    "ts-mocha": "^8.0.0",
+    "ts-node": "^9.1.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^7.0.0",
+    "babel-cli": "^6.26.0",
+    "tslint": "^6.1.2",
+    "typescript": "^4.1.2"
+  },
+  "scripts": {
+    "build": "./node_modules/.bin/babel src -d dist",
+    "test": "ts-mocha -p ./tsconfig.json TroodABACEngine.node.test.ts ",
+    "tslint": "tslint -p tsconfig.json -c tslint.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Q-CIS-DEV/trood-n8n.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Q-CIS-DEV/trood-n8n/issues"
+  },
+  "homepage": "https://github.com/Q-CIS-DEV/trood-n8n#readme"
+}
