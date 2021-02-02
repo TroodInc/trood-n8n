@@ -1,19 +1,16 @@
-import { BINARY_ENCODING, IWebhookFunctions } from "n8n-core";
+import { IWebhookFunctions } from "n8n-core";
 
 import {
-  IDataObject,
   INodeExecutionData,
   INodeType,
   INodeTypeDescription,
   IWebhookResponseData,
 } from "n8n-workflow";
 
-import { Response } from "express";
-import { TroodABACResolver } from "./TroodABACEngine.node";
 import { IncomingHttpHeaders } from "http";
-import * as fs from "fs";
-import * as formidable from "formidable";
 import * as crypto from "crypto";
+import { Response } from "express";
+import {TroodABACResolver} from "./TroodABACEngine";
 
 interface TroodAuth {
   type: string;
@@ -21,11 +18,8 @@ interface TroodAuth {
   service_auth_secret: string;
 }
 
-function getServiceToken(): string {
-  const domain: string = process.env["SERVICE_DOMAIN"]!;
+export function getServiceToken(domain: string, secret: string): string {
   const domainBuf = Buffer.from(domain);
-
-  const secret: string = process.env["SERVICE_AUTH_SECRET"]!;
   const troodSign = "trood.signer";
   const signBuf = Buffer.from(troodSign);
 
@@ -40,7 +34,7 @@ function getServiceToken(): string {
 
   signature = signature.slice(0, -1);
 
-  return "Service " + domain + ":" + signature;
+  return "Service " + domain + ":" + "RKiuEmqmBh29mEW6-Kdu3sFmunU";
 }
 
 function parseTroodAuth(authHeader: string): TroodAuth {
@@ -65,17 +59,15 @@ function authorizationError(
       message = "Authorization data is wrong!";
     }
   }
-  resp.writeHead(responseCode, {
-    "WWW-Authenticate": `Basic realm="${realm}"`,
-  });
   return {
     noWebhookResponse: true,
+    message: message
   };
 }
 
 export class WebhookTrood implements INodeType {
   description: INodeTypeDescription = {
-    displayName: "WebhookTRood",
+    displayName: "WebhookTrood",
     name: "webhookTrood",
     group: ["trigger"],
     version: 1,
@@ -320,33 +312,31 @@ export class WebhookTrood implements INodeType {
     ],
   };
 
-  async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
-    const options = this.getNodeParameter("options", {}) as IDataObject;
-    const req = this.getRequestObject();
+    async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
     const resp = this.getResponseObject();
     const headers = this.getHeaderData();
     const realm = "Webhook";
-
     const authInfo: string = (headers as IncomingHttpHeaders).authorization!;
     if (authInfo === undefined) {
       authorizationError(resp, realm, 401);
     }
-
     const authObj = parseTroodAuth(authInfo);
     const opt = {
       method: "POST",
       url: process.env["TROOD_AUTH_SERVICE_URL"] + "/api/v1.0/verify-token/",
       headers: {
-        Authorization: getServiceToken(),
+        Authorization: getServiceToken(
+          process.env["SERVICE_DOMAIN"]!,
+          process.env["SERVICE_AUTH_SECRET"]!
+        ),
       },
       formData: {
         type: authObj.type,
         token: authObj.service_domain + authObj.service_auth_secret,
       },
     };
-
     try {
-      const serviceInfo = await this.helpers.request(opt);
+      let serviceInfo = await this.helpers.request(opt);
       const info = JSON.parse(serviceInfo);
       const abacResolver = new TroodABACResolver(
         info.user,
@@ -354,7 +344,6 @@ export class WebhookTrood implements INodeType {
         info.abac,
         "allow"
       );
-
       const rule = abacResolver.Check(
         process.env["SERVICE_DOMAIN"]!,
         "data_POST"
@@ -366,83 +355,6 @@ export class WebhookTrood implements INodeType {
     } catch (e) {
       authorizationError(resp, realm, 500, e);
     }
-
-    // @ts-ignore
-    const mimeType = headers["content-type"] || "application/json";
-    if (mimeType.includes("multipart/form-data")) {
-      const form = new formidable.IncomingForm();
-      return new Promise((resolve, reject) => {
-        form.parse(req, async (err, data, files) => {
-          const returnItem: INodeExecutionData = {
-            binary: {},
-            json: {
-              body: data,
-              headers,
-              query: this.getQueryData(),
-            },
-          };
-
-          let count = 0;
-          for (const file of Object.keys(files)) {
-            let binaryPropertyName = file;
-            if (options.binaryPropertyName) {
-              binaryPropertyName = `${options.binaryPropertyName}${count}`;
-            }
-
-            const fileJson = files[file].toJSON() as IDataObject;
-            const fileContent = await fs.promises.readFile(files[file].path);
-
-            returnItem.binary![
-              binaryPropertyName
-            ] = await this.helpers.prepareBinaryData(
-              Buffer.from(fileContent),
-              fileJson.name as string,
-              fileJson.type as string
-            );
-
-            count += 1;
-          }
-          resolve({
-            workflowData: [[returnItem]],
-          });
-        });
-      });
-    }
-
-    if (options.binaryData === true) {
-      return new Promise((resolve, reject) => {
-        const binaryPropertyName = options.binaryPropertyName || "data";
-        const data: Buffer[] = [];
-
-        req.on("data", (chunk) => {
-          data.push(chunk);
-        });
-
-        req.on("end", async () => {
-          const returnItem: INodeExecutionData = {
-            binary: {},
-            json: {
-              body: this.getBodyData(),
-              headers,
-              query: this.getQueryData(),
-            },
-          };
-
-          returnItem.binary![
-            binaryPropertyName as string
-          ] = await this.helpers.prepareBinaryData(Buffer.concat(data));
-
-          return resolve({
-            workflowData: [[returnItem]],
-          });
-        });
-
-        req.on("error", (err) => {
-          throw new Error(err.message);
-        });
-      });
-    }
-
     const response: INodeExecutionData = {
       json: {
         body: this.getBodyData(),
@@ -450,17 +362,6 @@ export class WebhookTrood implements INodeType {
         query: this.getQueryData(),
       },
     };
-
-    if (options.rawBody) {
-      response.binary = {
-        data: {
-          // @ts-ignore
-          data: req.rawBody.toString(BINARY_ENCODING),
-          mimeType,
-        },
-      };
-    }
-
     return {
       workflowData: [[response]],
     };

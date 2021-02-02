@@ -5,6 +5,7 @@
   "description": "Trood extensions for N8N platform",
   "main": "index.js",
   "dependencies": {
+    "express": "^4.16.4",
     "@types/chai": "^4.2.14",
     "@types/node": "^14.14.10",
     "chai": "^4.2.0",
@@ -13,6 +14,7 @@
     "ts-node": "^9.1.0"
   },
   "devDependencies": {
+    "@types/express": "4.17.6",
     "@types/mocha": "^7.0.0",
     "babel-cli": "^6.26.0",
     "tslint": "^6.1.2",
@@ -20,7 +22,7 @@
   },
   "scripts": {
     "build": "./node_modules/.bin/babel src -d dist",
-    "test": "ts-mocha -p ./tsconfig.json TroodABACEngine.node.test.ts ",
+    "test": "ts-mocha -p ./tsconfig.json TroodABACEngine.test.ts ",
     "tslint": "tslint -p tsconfig.json -c tslint.json"
   },
   "repository": {

@@ -1,10 +1,26 @@
+import { getServiceToken } from "./WebhookTrood.node";
 const TroodABACEngine = require("./TroodABACEngine.node.ts");
+
 const mocha = require("mocha"); // require mocha
 const chai = require("chai"); // require chai
 
 const expect = chai.expect;
 const describe = mocha.describe;
 const it = mocha.it;
+
+describe("Webhook", () => {
+  describe("getServiceToken", () => {
+    it("should be able to add things correctly", () => {
+      const res = getServiceToken(
+        "WebhookTrood1",
+        "de027c639f55251704ed81a0f3aa4ebae21039dde6891ed652823ae6dbc2b544487c0fa93da788f90819bc92813d7e7ee7a3c7d0ee833eeb356aecc59e3383e9"
+      );
+      expect(res).to.be.equal(
+        "Service WebhookTrood1:2KLVYrVsepMGq4eS6LpcahLscrI"
+      );
+    });
+  });
+});
 
 describe("AbacEngine", () => {
   const resolver = new TroodABACEngine.TroodABACResolver(
@@ -173,4 +189,5 @@ describe("AbacEngine", () => {
       expect(res.filter).to.equal(undefined);
     });
   });
+
 });
